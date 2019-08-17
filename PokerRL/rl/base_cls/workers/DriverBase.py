@@ -49,6 +49,7 @@ class DriverBase(WorkerBase):
             from PokerRL.eval.lbr.DistLBRWorker import DistLBRWorker as LBRWorker
             from PokerRL.eval.br.DistBRMaster import DistBRMaster as BRMaster
             from PokerRL.eval.head_to_head.DistHead2HeadMaster import DistHead2HeadMaster as Head2HeadMaster
+            from PokerRL.eval.head_to_head.DistHistoryMaster import DistHistoryMaster as HistoryMaster
 
         else:
             from PokerRL.eval.lbr.LocalLBRMaster import LocalLBRMaster as LBRMaster
@@ -60,7 +61,8 @@ class DriverBase(WorkerBase):
             from PokerRL.eval.lbr.LocalLBRWorker import LocalLBRWorker as LBRWorker
             from PokerRL.eval.br.LocalBRMaster import LocalBRMaster as BRMaster
             from PokerRL.eval.head_to_head.LocalHead2HeadMaster import LocalHead2HeadMaster as Head2HeadMaster
-
+            from PokerRL.eval.head_to_head.LocalHistoryMaster import LocalHistoryMaster as HistoryMaster
+            
         # safety measure to avoid overwriting logs when reloading
         if name_to_import is not None and iteration_to_import is not None and name_to_import == t_prof.name:
             t_prof.name += "_"
@@ -86,6 +88,15 @@ class DriverBase(WorkerBase):
                                                                 self.chief_handle,
                                                                 eval_agent_cls),
                                         eval_methods["h2h"]  # freq
+                                        )
+
+        if "history" in list(eval_methods.keys()):
+            print("Creating History Mode Evaluator...")
+            self.eval_masters["history"] = (self._ray.create_worker(HistoryMaster,
+                                                                t_prof,
+                                                                self.chief_handle,
+                                                                eval_agent_cls),
+                                        eval_methods["history"]  # freq
                                         )
 
         if "lbr" in list(eval_methods.keys()):
@@ -213,6 +224,11 @@ class DriverBase(WorkerBase):
         if self._cfr_iter % self._t_prof.checkpoint_freq == 0:
             print("Saving Checkpoint")
             self.checkpoint(curr_step=self._cfr_iter)
+            
+    def periodically_export_hands(self):
+        if self._cfr_iter % self._t_prof.export_hands_freq == 0:
+            print("Exporting Hands")
+            self.export_hands(curr_step=self._cfr_iter)
 
     def export_eval_agent(self):
         print("Exporting agent")

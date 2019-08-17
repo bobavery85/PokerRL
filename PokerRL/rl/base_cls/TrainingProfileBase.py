@@ -20,6 +20,7 @@ class TrainingProfileBase:
                  log_verbose,
                  log_export_freq,
                  checkpoint_freq,
+                 export_hands_freq,
                  eval_agent_export_freq,
 
                  # --- env
@@ -40,6 +41,7 @@ class TrainingProfileBase:
                  DISTRIBUTED=False,
                  CLUSTER=False,
                  DEBUGGING=False,
+                 TESTING=False,
 
                  # --- Only relevant if running distributed
                  redis_head_adr=None,  # (str) IP under which the ray redis server can be reached
@@ -81,6 +83,7 @@ class TrainingProfileBase:
         self.log_verbose = log_verbose
         self.log_export_freq = log_export_freq
         self.checkpoint_freq = checkpoint_freq
+        self.export_hands_freq = export_hands_freq
         self.eval_agent_export_freq = eval_agent_export_freq
 
         self.module_args = module_args
@@ -97,6 +100,7 @@ class TrainingProfileBase:
         self.DISTRIBUTED = DISTRIBUTED or CLUSTER
         self.CLUSTER = CLUSTER
         self.DEBUGGING = DEBUGGING
+        self.TESTING = TESTING
         self.HAVE_GPU = torch.cuda.is_available()
 
         self.n_seats = self.module_args["env"].n_seats
@@ -124,15 +128,19 @@ class TrainingProfileBase:
             return "C:\\" if os.name == 'nt' else os.path.expanduser('~/')
 
         self._data_path = path_data if path_data is not None else os.path.join(get_root_path(), "poker_ai_data")
+        if self.TESTING:
+            self._data_path = os.path.join(self._data_path, "testing")
         self.path_agent_export_storage = ospj(self._data_path, "eval_agent")
         self.path_log_storage = ospj(self._data_path, "logs")
         self.path_checkpoint = ospj(self._data_path, "checkpoint")
+        self.path_export_hands = ospj(self._data_path, "export_hands")
         self.path_trainingprofiles = ospj(self._data_path, "TrainingProfiles")
 
         for p in [self._data_path,
                   self.path_agent_export_storage,
                   self.path_log_storage,
                   self.path_checkpoint,
+                  self.path_export_hands,
                   self.path_trainingprofiles,
                   ]:
             if (not os.path.exists(p)) and (not os.path.isfile(p)):

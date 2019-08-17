@@ -40,7 +40,12 @@ class MainPokerModuleFLAT(nn.Module):
         self.priv_obs_size = self.env_bldr.priv_obs_size
 
         self._relu = nn.ReLU(inplace=False)
-
+        #print(device)
+        #print(torch.cuda.is_available())
+        #print(torch.cuda.device_count())
+        #print(torch.cuda.current_device())
+        #print(self.env_bldr.complete_obs_size)
+        #print(mpm_args.other_units)
         if mpm_args.use_pre_layers:
             self._priv_cards = nn.Linear(in_features=self.env_bldr.priv_obs_size,
                                          out_features=mpm_args.other_units)
@@ -148,3 +153,124 @@ class MPMArgsFLAT:
 
     def get_mpm_cls(self):
         return MainPokerModuleFLAT
+
+class PaperMainPokerModuleFLAT(nn.Module):
+    """
+    Feeds parts of the observation through different fc layers before the RNN
+
+    Structure (each branch merge is a concat):
+
+    Table & Player state --> FC -> RE -> FCS -> RE ----------------------------.
+    Board Cards ---> FC -> RE --> cat -> FC -> RE -> FCS -> RE -> FC -> RE --> cat --> FC -> RE -> FCS-> RE -> Normalize
+    Private Cards -> FC -> RE -'
+
+
+    where FCS refers to FC+Skip and RE refers to ReLU
+    """
+
+    def __init__(self,
+                 env_bldr,
+                 device,
+                 mpm_args,
+                 ):
+        super().__init__()
+        self.args = mpm_args
+
+        #print(device)
+        #print(torch.cuda.is_available())
+        #print(torch.cuda.device_count())
+        #print(torch.cuda.current_device())
+
+        self.env_bldr = env_bldr
+
+        self.N_SEATS = self.env_bldr.N_SEATS
+        #self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        #self.device = torch.device("cpu")
+        self.device = device
+       # torch.set_default_tensor_type('torch.cpu.FloatTensor')
+        self.board_start = self.env_bldr.obs_board_idxs[0]
+        self.board_stop = self.board_start + len(self.env_bldr.obs_board_idxs)
+
+        self.pub_obs_size = self.env_bldr.pub_obs_size
+        self.priv_obs_size = self.env_bldr.priv_obs_size
+
+        self._relu = nn.ReLU(inplace=False)
+        #print(device)
+        #print(torch.cuda.is_available())
+        #print(torch.cuda.device_count())
+        #print(torch.cuda.current_device())
+        #print(self.env_bldr.complete_obs_size)
+        #print(mpm_args.first_units)
+        self.final_fc_1 = nn.Linear(in_features=self.env_bldr.complete_obs_size,
+                                    out_features=mpm_args.first_units)
+        self.final_fc_2 = nn.Linear(in_features=mpm_args.first_units,
+                                    out_features=mpm_args.second_units)
+        self.final_fc_3 = nn.Linear(in_features=mpm_args.second_units,
+                                    out_features=mpm_args.third_units)
+        self.final_fc_4 = nn.Linear(in_features=mpm_args.third_units,
+                                    out_features=mpm_args.fourth_units)
+
+        self.lut_range_idx_2_priv_o = torch.from_numpy(
+            self.env_bldr.lut_holder.LUT_RANGE_IDX_TO_PRIVATE_OBS)
+        self.lut_range_idx_2_priv_o = self.lut_range_idx_2_priv_o.to(
+            device=self.device, dtype=torch.float32)
+
+        self.to(device)
+
+    @property
+    def output_units(self):
+        return self.args.fourth_units
+
+    def forward(self, pub_obses, range_idxs):
+        """
+        1. do list -> padded
+        2. feed through pre-processing fc layers
+        3. PackedSequence (sort, pack)
+        4. rnn
+        5. unpack (unpack re-sort)
+        6. cut output to only last entry in sequence
+
+        Args:
+            pub_obses (list):                 list of np arrays of shape [np.arr([history_len, n_features]), ...)
+            range_idxs (LongTensor):        range_idxs (one for each pub_obs) tensor([2, 421, 58, 912, ...])
+        """
+
+        # ____________________________________________ Packed Sequence _____________________________________________
+        priv_obses = self.lut_range_idx_2_priv_o[range_idxs]
+
+        if isinstance(pub_obses, list):
+            pub_obses = torch.from_numpy(np.array(pub_obses)).to(self.device,
+                                                                 torch.float32)
+
+        y = torch.cat((priv_obses, pub_obses,), dim=-1)
+
+        final = self._relu(self.final_fc_1(y))
+        final = self._relu(self.final_fc_2(final))
+        final = self._relu(self.final_fc_3(final))
+        final = self._relu(self.final_fc_4(final))
+
+        # Normalize last layer
+        if self.args.normalize:
+            final = final - final.mean(dim=-1).unsqueeze(-1)
+            final = final / final.std(dim=-1).unsqueeze(-1)
+
+        return final
+
+
+class PaperMPMArgsFLAT:
+
+    def __init__(self,
+                 first_units=1024,
+                 second_units=512,
+                 third_units=1024,
+                 fourth_units=512,
+                 normalize=True,
+                 ):
+        self.first_units=first_units
+        self.second_units=second_units
+        self.third_units=third_units
+        self.fourth_units=fourth_units
+        self.normalize = normalize
+
+    def get_mpm_cls(self):
+        return PaperMainPokerModuleFLAT
