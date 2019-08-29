@@ -38,10 +38,11 @@ class MaybeRay:
         )
 
     def init_local(self):
+        print("memory", psutil.virtual_memory().total)
         if self.runs_distributed:
             ray.init(
-                redis_max_memory=min(10 ** 10, int(psutil.virtual_memory().total * 0.1)),
-                object_store_memory=min(2 * (10 ** 10), int(psutil.virtual_memory().total * 0.4)),
+                redis_max_memory=min(10 ** 11, int(psutil.virtual_memory().total * 0.15)),
+                object_store_memory=min(2 * (10 ** 11), int(psutil.virtual_memory().total * 0.4)),
             )
 
     def get(self, obj):

@@ -50,6 +50,7 @@ class DriverBase(WorkerBase):
             from PokerRL.eval.br.DistBRMaster import DistBRMaster as BRMaster
             from PokerRL.eval.head_to_head.DistHead2HeadMaster import DistHead2HeadMaster as Head2HeadMaster
             from PokerRL.eval.head_to_head.DistHistoryMaster import DistHistoryMaster as HistoryMaster
+            from PokerRL.eval.head_to_head.DistOfflineMaster import DistOfflineMaster as OfflineMaster
 
         else:
             from PokerRL.eval.lbr.LocalLBRMaster import LocalLBRMaster as LBRMaster
@@ -62,6 +63,7 @@ class DriverBase(WorkerBase):
             from PokerRL.eval.br.LocalBRMaster import LocalBRMaster as BRMaster
             from PokerRL.eval.head_to_head.LocalHead2HeadMaster import LocalHead2HeadMaster as Head2HeadMaster
             from PokerRL.eval.head_to_head.LocalHistoryMaster import LocalHistoryMaster as HistoryMaster
+            from PokerRL.eval.head_to_head.LocalOfflineMaster import LocalOfflineMaster as OfflineMaster
             
         # safety measure to avoid overwriting logs when reloading
         if name_to_import is not None and iteration_to_import is not None and name_to_import == t_prof.name:
@@ -97,6 +99,15 @@ class DriverBase(WorkerBase):
                                                                 self.chief_handle,
                                                                 eval_agent_cls),
                                         eval_methods["history"]  # freq
+                                        )
+
+        if "offline" in list(eval_methods.keys()):
+            print("Creating Offline Mode Evaluator...")
+            self.eval_masters["offline"] = (self._ray.create_worker(OfflineMaster,
+                                                                t_prof,
+                                                                self.chief_handle,
+                                                                eval_agent_cls),
+                                        eval_methods["offline"]  # freq
                                         )
 
         if "lbr" in list(eval_methods.keys()):
