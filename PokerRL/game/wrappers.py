@@ -7,6 +7,8 @@ env_builder interface. Creating an env_builder is your starting point to create 
 (potentially with a wrapper).
 """
 
+import numpy as np
+
 from PokerRL.game.Poker import Poker
 from PokerRL.game._.EnvWrapperBuilderBase import EnvWrapperBuilderBase as _EnvWrapperBuilderBase
 from PokerRL.game._.wrappers.FlatHULimitPokerHistoryWrapper import \
@@ -88,7 +90,23 @@ class FlatNonHULimitPokerEnvBuilder(_EnvWrapperBuilderBase):
                + p_id * self._VEC_PER_PLAYER_ROUND_SIZE[round_] \
                + nth_action_this_round * len([Poker.BET_RAISE, Poker.CHECK_CALL, Poker.FOLD]) \
                + action_idx
-    
+               
+    def get_canonical_action_vector(self, action_vector, p_id):
+        if p_id == 0:
+            return action_vector
+        assert len(action_vector) == self.action_vector_size
+        for r in range(len(self._VEC_ROUND_OFFSETS)):
+            round_start = self._VEC_ROUND_OFFSETS[r]
+            if (r + 1) == len(self._VEC_ROUND_OFFSETS):
+                round_end = self.action_vector_size
+            else:
+                round_end = self._VEC_ROUND_OFFSETS[r + 1]
+            round_vector = np.array(action_vector[round_start:round_end])
+            round_vector = np.roll(round_vector,
+                                   -1 * p_id * self._VEC_PER_PLAYER_ROUND_SIZE[r])
+            action_vector[round_start:round_end] = round_vector
+        return action_vector
+
     def debug_action_vector(self, idx):
         actions = ['FOLD', 'CHECK_CALL', 'BET_RAISE']
         curr_idx = 0

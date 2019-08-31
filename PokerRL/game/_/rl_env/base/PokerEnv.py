@@ -678,7 +678,7 @@ class PokerEnv:
         self.current_round += 1  # highly dependant on PokerEnv.""ROUND_NAME"" being sequential ints!
         self._deal_next_round()
 
-    def _step(self, processed_action):
+    def _step(self, processed_action, canonical=False):
         """
         the action passed is considered to be for self.current_player and come from its respective agent (if applicable
         to your algorithm).
@@ -786,7 +786,9 @@ class PokerEnv:
         else:
             raise RuntimeError("There seems to be an edge-case not built into this")
 
-        return self._get_current_step_returns(is_terminal=is_terminal, info=info)
+        return self._get_current_step_returns(
+            is_terminal=is_terminal, info=info,
+            canonical=self.current_player.seat_id if canonical else None)
 
     # _____________________________________________________ UTIL  ______________________________________________________
     def _get_winner_list(self, players_to_consider):
@@ -954,12 +956,12 @@ class PokerEnv:
         return True
 
     # _____________________________________________________ OUTPUT _____________________________________________________
-    def _get_current_step_returns(self, is_terminal, info):
-        obs = self.get_current_obs(is_terminal)
+    def _get_current_step_returns(self, is_terminal, info, canonical=None):
+        obs = self.get_current_obs(is_terminal, canonical=canonical)
         reward = self._get_step_reward(is_terminal)
         return obs, reward, is_terminal, info
 
-    def _get_player_states_all_players(self, normalization_sum):
+    def _get_player_states_all_players(self, normalization_sum, canonical=None):
         """ Public Information About Each Player """
         if (self.N_SEATS == 2) and self._USE_SIMPLE_HU_OBS:
             player_states = []
@@ -983,6 +985,10 @@ class PokerEnv:
                 if player.side_pot_rank > 0:
                     x[int(player.side_pot_rank)] = 1
                 player_states += x
+            if canonical is not None:
+                per_player_size = 4 + self.N_SEATS
+                player_states = list(np.roll(player_states,
+                                             -1 * per_player_size * canonical))
 
         return player_states
 
@@ -1001,7 +1007,7 @@ class PokerEnv:
 
         return _board_space
 
-    def _get_table_state(self, normalization_sum):
+    def _get_table_state(self, normalization_sum, canonical=None):
         if (self.N_SEATS == 2) and self._USE_SIMPLE_HU_OBS:
             community_state = [
                 self.ANTE / normalization_sum,
@@ -1046,11 +1052,17 @@ class PokerEnv:
             if self.last_action[0] is not None:
                 x_who[self.last_action[2]] = 1
                 x_what[self.last_action[0]] = 1
-            community_state += x_what + x_who
+            if canonical is not None:
+                community_state += x_what + list(np.roll(x_who, -1 * canonical))
+            else:
+                community_state += x_what + x_who
 
             # who acts next?
             x = [0] * self.N_SEATS
-            x[self.current_player.seat_id] = 1
+            if canonical is not None:
+                x[0] = 1
+            else:
+                x[self.current_player.seat_id] = 1
             community_state += x
 
             # current round
@@ -1060,7 +1072,12 @@ class PokerEnv:
 
             # side_pots
             if self.N_SEATS > 2:
-                community_state += [sp / normalization_sum for sp in self.side_pots]
+                if canonical is not None:
+                    community_state += list(np.roll([sp / normalization_sum
+                                         for sp in self.side_pots], -1 * canonical))
+                else:
+                    community_state += [sp / normalization_sum
+                                         for sp in self.side_pots]
             else:
                 community_state += [0] * self.N_SEATS
 
@@ -1145,7 +1162,7 @@ class PokerEnv:
         """
         return self._step(action)
 
-    def step(self, action):
+    def step(self, action, canonical=None):
         """
         Args:
             action: env specific action representation as documented in PokerEnv.
@@ -1156,7 +1173,7 @@ class PokerEnv:
 
         # cap min/max raises and format action. after that the action is legal 100% and can be executed blindly
         processed_action = self._get_env_adjusted_action_formulation(action)
-        return self._step(processed_action=processed_action)
+        return self._step(processed_action=processed_action, canonical=canonical)
 
     def state_dict(self):
         env_state_dict = {
@@ -1250,7 +1267,7 @@ class PokerEnv:
                 p.hand = np.copy(env_state_dict[EnvDictIdxs.seats][p.seat_id][PlayerDictIdxs.hand])
                 p.hand_rank = env_state_dict[EnvDictIdxs.seats][p.seat_id][PlayerDictIdxs.hand_rank]
 
-    def get_current_obs(self, is_terminal):
+    def get_current_obs(self, is_terminal, canonical=None):
         """
         This function can be useful for manually setting the environment to a desired state and then getting the
         formatted observation from it without actually stepping it.
@@ -1265,8 +1282,10 @@ class PokerEnv:
         if is_terminal:
             return np.zeros(shape=self.observation_space.shape, dtype=np.float32)  # terminal is all zero
         normalization_sum = float(sum([s.starting_stack_this_episode for s in self.seats])) / self.N_SEATS
-        return np.array(self._get_table_state(normalization_sum=normalization_sum) \
-                        + self._get_player_states_all_players(normalization_sum=normalization_sum) \
+        return np.array(self._get_table_state(normalization_sum=normalization_sum,
+                                              canonical=canonical) \
+                        + self._get_player_states_all_players(normalization_sum=normalization_sum,
+                                                              canonical=canonical) \
                         + self._get_board_state()
                         , dtype=np.float32)
 

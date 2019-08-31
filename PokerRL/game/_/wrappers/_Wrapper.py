@@ -18,20 +18,21 @@ class Wrapper:
         self.env = env
         self.env_bldr = env_bldr_that_built_me
 
-    def _return_obs(self, rew_for_all_players, done, info, env_obs=None):
-        return self.get_current_obs(env_obs=env_obs), rew_for_all_players, done, info
+    def _return_obs(self, rew_for_all_players, done, info, env_obs=None, canonical=None):
+        return self.get_current_obs(env_obs=env_obs, canonical=canonical), rew_for_all_players, done, info
 
     # _______________________________ directly interact with the env inside the wrapper ________________________________
-    def step(self, action):
+    def step(self, action, canonical=False):
         """
         Steps the environment from an action of the natural action representation to the environment.
 
         Returns:
             obs, reward, done, info
         """
-        env_obs, rew_for_all_players, done, info = self.env.step(action)
+        env_obs, rew_for_all_players, done, info = self.env.step(action, canonical=canonical)
         self._pushback(env_obs)
-        return self._return_obs(env_obs=env_obs, rew_for_all_players=rew_for_all_players, done=done, info=info)
+        return self._return_obs(env_obs=env_obs, rew_for_all_players=rew_for_all_players, done=done, info=info,
+                                canonical=self.env.current_player.seat_id if canonical else None)
 
     def step_from_processed_tuple(self, action):
         """
@@ -77,7 +78,7 @@ class Wrapper:
         """
         raise NotImplementedError
 
-    def get_current_obs(self, env_obs):
+    def get_current_obs(self, env_obs, canonical):
         raise NotImplementedError
 
     def print_obs(self, wrapped_obs):

@@ -73,11 +73,19 @@ class FlatNonHULimitPokerHistoryWrapper(Wrapper):
             if 1.0 == action_sequence[idx]:
                 self.env_bldr.debug_action_vector(idx)
 
-    def get_current_obs(self, env_obs=None):
-        if env_obs is None:
-            return np.concatenate((self.env.get_current_obs(is_terminal=False), self._action_history_vector,), axis=0)
+    def get_current_obs(self, env_obs=None, canonical=None):
+        if canonical is not None:
+            actions_copy = self.env_bldr.get_canonical_action_vector(
+                copy.deepcopy(self._action_history_vector), canonical)
         else:
-            return np.concatenate((env_obs, self._action_history_vector,), axis=0)
+            actions_copy = self._action_history_vector
+            
+        if env_obs is None:
+            return np.concatenate((self.env.get_current_obs(is_terminal=False,
+                                                            canonical=canonical),
+                                   actions_copy,), axis=0)
+        else:
+            return np.concatenate((env_obs, actions_copy,), axis=0)
 
     def state_dict(self):
         return {
