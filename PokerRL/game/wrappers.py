@@ -92,6 +92,7 @@ class FlatNonHULimitPokerEnvBuilder(_EnvWrapperBuilderBase):
                + action_idx
                
     def get_canonical_action_vector(self, action_vector, p_id):
+        #print("builder: ", type(p_id), p_id)
         if p_id == 0:
             return action_vector
         assert len(action_vector) == self.action_vector_size

@@ -678,7 +678,7 @@ class PokerEnv:
         self.current_round += 1  # highly dependant on PokerEnv.""ROUND_NAME"" being sequential ints!
         self._deal_next_round()
 
-    def _step(self, processed_action, canonical=False):
+    def _step(self, processed_action, use_canonical=False):
         """
         the action passed is considered to be for self.current_player and come from its respective agent (if applicable
         to your algorithm).
@@ -788,7 +788,7 @@ class PokerEnv:
 
         return self._get_current_step_returns(
             is_terminal=is_terminal, info=info,
-            canonical=self.current_player.seat_id if canonical else None)
+            use_canonical=use_canonical, p_id=self.current_player.seat_id)
 
     # _____________________________________________________ UTIL  ______________________________________________________
     def _get_winner_list(self, players_to_consider):
@@ -956,12 +956,13 @@ class PokerEnv:
         return True
 
     # _____________________________________________________ OUTPUT _____________________________________________________
-    def _get_current_step_returns(self, is_terminal, info, canonical=None):
-        obs = self.get_current_obs(is_terminal, canonical=canonical)
+    def _get_current_step_returns(self, is_terminal, info, use_canonical=False, p_id=0):
+        obs = self.get_current_obs(is_terminal, use_canonical=use_canonical, p_id=p_id)
         reward = self._get_step_reward(is_terminal)
         return obs, reward, is_terminal, info
 
-    def _get_player_states_all_players(self, normalization_sum, canonical=None):
+    def _get_player_states_all_players(self, normalization_sum, use_canonical=False,
+                                       p_id=0):
         """ Public Information About Each Player """
         if (self.N_SEATS == 2) and self._USE_SIMPLE_HU_OBS:
             player_states = []
@@ -985,10 +986,10 @@ class PokerEnv:
                 if player.side_pot_rank > 0:
                     x[int(player.side_pot_rank)] = 1
                 player_states += x
-            if canonical is not None:
+            if use_canonical:
                 per_player_size = 4 + self.N_SEATS
                 player_states = list(np.roll(player_states,
-                                             -1 * per_player_size * canonical))
+                                             -1 * per_player_size * p_id))
 
         return player_states
 
@@ -1007,7 +1008,7 @@ class PokerEnv:
 
         return _board_space
 
-    def _get_table_state(self, normalization_sum, canonical=None):
+    def _get_table_state(self, normalization_sum, use_canonical=False, p_id=0):
         if (self.N_SEATS == 2) and self._USE_SIMPLE_HU_OBS:
             community_state = [
                 self.ANTE / normalization_sum,
@@ -1052,14 +1053,14 @@ class PokerEnv:
             if self.last_action[0] is not None:
                 x_who[self.last_action[2]] = 1
                 x_what[self.last_action[0]] = 1
-            if canonical is not None:
-                community_state += x_what + list(np.roll(x_who, -1 * canonical))
+            if use_canonical:
+                community_state += x_what + list(np.roll(x_who, -1 * p_id))
             else:
                 community_state += x_what + x_who
 
             # who acts next?
             x = [0] * self.N_SEATS
-            if canonical is not None:
+            if use_canonical:
                 x[0] = 1
             else:
                 x[self.current_player.seat_id] = 1
@@ -1072,9 +1073,9 @@ class PokerEnv:
 
             # side_pots
             if self.N_SEATS > 2:
-                if canonical is not None:
+                if use_canonical:
                     community_state += list(np.roll([sp / normalization_sum
-                                         for sp in self.side_pots], -1 * canonical))
+                                         for sp in self.side_pots], -1 * p_id))
                 else:
                     community_state += [sp / normalization_sum
                                          for sp in self.side_pots]
@@ -1162,7 +1163,7 @@ class PokerEnv:
         """
         return self._step(action)
 
-    def step(self, action, canonical=None):
+    def step(self, action, use_canonical=False):
         """
         Args:
             action: env specific action representation as documented in PokerEnv.
@@ -1173,7 +1174,7 @@ class PokerEnv:
 
         # cap min/max raises and format action. after that the action is legal 100% and can be executed blindly
         processed_action = self._get_env_adjusted_action_formulation(action)
-        return self._step(processed_action=processed_action, canonical=canonical)
+        return self._step(processed_action=processed_action, use_canonical=use_canonical)
 
     def state_dict(self):
         env_state_dict = {
@@ -1267,7 +1268,7 @@ class PokerEnv:
                 p.hand = np.copy(env_state_dict[EnvDictIdxs.seats][p.seat_id][PlayerDictIdxs.hand])
                 p.hand_rank = env_state_dict[EnvDictIdxs.seats][p.seat_id][PlayerDictIdxs.hand_rank]
 
-    def get_current_obs(self, is_terminal, canonical=None):
+    def get_current_obs(self, is_terminal, use_canonical=False, p_id=0):
         """
         This function can be useful for manually setting the environment to a desired state and then getting the
         formatted observation from it without actually stepping it.
@@ -1283,9 +1284,10 @@ class PokerEnv:
             return np.zeros(shape=self.observation_space.shape, dtype=np.float32)  # terminal is all zero
         normalization_sum = float(sum([s.starting_stack_this_episode for s in self.seats])) / self.N_SEATS
         return np.array(self._get_table_state(normalization_sum=normalization_sum,
-                                              canonical=canonical) \
+                                              use_canonical=use_canonical, p_id=p_id) \
                         + self._get_player_states_all_players(normalization_sum=normalization_sum,
-                                                              canonical=canonical) \
+                                                              use_canonical=use_canonical,
+                                                              p_id=p_id) \
                         + self._get_board_state()
                         , dtype=np.float32)
 

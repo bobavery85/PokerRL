@@ -19,7 +19,6 @@ class LocalOfflineMaster(EvaluatorMasterBase):
 
         self._args = t_prof.module_args["offline"]
         self._env_bldr = rl_util.get_env_builder(t_prof=t_prof)
-
         self._eval_agents = [
             eval_agent_cls(t_prof=t_prof)
             for _ in range(self._env_bldr.N_SEATS)
@@ -43,10 +42,12 @@ class LocalOfflineMaster(EvaluatorMasterBase):
     def _load_agent_weights(self):
         hero_state = load_pickle(path=self._args.hero_file_path)
         self._eval_agents[self._REFERENCE_AGENT].load_state_dict(hero_state)
+        self._eval_agents[self._REFERENCE_AGENT].set_use_canonical(self._args.hero_use_canonical)
         villain_state = load_pickle(path=self._args.villain_file_path)
         for i in range(self._env_bldr.N_SEATS):
             if i != self._REFERENCE_AGENT:
                 self._eval_agents[i].load_state_dict(villain_state)
+                self._eval_agents[i].set_use_canonical(self._args.villain_use_canonical)
         return True
 
     def evaluate(self, iter_nr):
@@ -95,7 +96,7 @@ class LocalOfflineMaster(EvaluatorMasterBase):
                                   )
         
     def _run_eval(self, stack_size):
-        winnings = np.empty(shape=(self._args.n_hands * self._env_bldr.N_SEATS), dtype=np.float32)
+        winnings = np.zeros(shape=(self._args.n_hands * self._env_bldr.N_SEATS), dtype=np.float32)
 
         _env = self._eval_env_bldr.get_new_env(is_evaluating=True, stack_size=stack_size)
         hands_played = 0
@@ -141,5 +142,7 @@ class LocalOfflineMaster(EvaluatorMasterBase):
                 winnings[iteration_id + (seat_p0 * self._args.n_hands)] = r_for_all[seat_p0] \
                                                                           * _env.REWARD_SCALAR \
                                                                           * _env.EV_NORMALIZER
+                if hands_played % 100 == 0:
+                    print(self._get_95confidence(winnings))
 
         return self._get_95confidence(winnings)

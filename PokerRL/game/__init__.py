@@ -1,6 +1,7 @@
 from . import PokerEnvStateDictEnums
 from . import bet_sets
 from .AgentTournament import *
+from .HandProbGame import *
 from .InteractiveGame import *
 from .Poker import *
 from .PokerRange import *
